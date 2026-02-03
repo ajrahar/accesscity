@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # 1. SPATIAL DATABASE (PostgreSQL + PostGIS) 🗄️
+  db:
+    image: kartoza/postgis:14-3.1
+    container_name: accesscity_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=gis
+      - POSTGRES_USER=docker
+      - POSTGRES_PASSWORD=docker
+      - ALLOW_IP_RANGE=0.0.0.0/0
+    ports:
+      - "5433:5432"
+    networks:
+      - geo-network
+    restart: on-failure
+
+  # 2. MAP SERVER (GeoServer) 🌍
+  geoserver:
+    image: kartoza/geoserver:2.22.0
+    container_name: accesscity_geoserver
+    volumes:
+      - ./geoserver-data:/opt/geoserver/data_dir
+    ports:
+      - "8080:8080"
+    environment:
+      - GEOSERVER_ADMIN_PASSWORD=geoserver
+      - GEOSERVER_ADMIN_USER=admin
+      - INITIAL_MEMORY=2G
+      - MAXIMUM_MEMORY=4G
+    depends_on:
+      - db
+    networks:
+      - geo-network
+
+  # 3. SIMULATION SERVICE (FastAPI - Python) 🧠
+  simulation-service:
+    build: ./backend-simulation
+    container_name: accesscity_simulation
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend-simulation:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://docker:docker@db:5432/gis
+    depends_on:
+      - db
+    networks:
+      - geo-network
+
+  # 4. FRONTEND SERVICE (React/MapStore) 🗺️
+  frontend-service:
+    build: ./frontend-mapstore
+    container_name: accesscity_frontend
+    volumes:
+      - ./frontend-mapstore:/app
+      - /app/node_modules
+    ports:
+      - "8081:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    depends_on:
+      - simulation-service
+    networks:
+      - geo-network
+
+volumes:
+  postgres_data:
+  geoserver-data:
+
+networks:
+  geo-network:
+    driver: bridge
