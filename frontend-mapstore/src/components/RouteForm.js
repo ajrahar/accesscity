@@ -1,10 +1,21 @@
 import React, { useState } from 'react';
 
-const RouteForm = ({ onRouteFound }) => {
-    const [start, setStart] = useState("-7.750, 110.390"); // Default: UGM area
-    const [end, setEnd] = useState("-7.755, 110.395");
+const RouteForm = ({ onRouteFound, profile }) => {
+    const [start, setStart] = useState("Universitas Gadjah Mada");
+    const [end, setEnd] = useState("Tugu Yogyakarta");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+
+    const geocode = async (query) => {
+        const response = await fetch('http://localhost:8000/api/v1/simulation/geocode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: query })
+        });
+        if (!response.ok) throw new Error(`Location not found: ${query}`);
+        const result = await response.json();
+        return result.data; // { lat, lon, address }
+    };
 
     const handleSearch = async (e) => {
         e.preventDefault();
@@ -12,14 +23,16 @@ const RouteForm = ({ onRouteFound }) => {
         setError(null);
 
         try {
-            // Parse inputs (simple text parsing for now)
-            const [lat1, lon1] = start.split(',').map(s => parseFloat(s.trim()));
-            const [lat2, lon2] = end.split(',').map(s => parseFloat(s.trim()));
+            // 1. Geocode Start
+            const startCoords = await geocode(start);
+            // 2. Geocode End
+            const endCoords = await geocode(end);
 
             const payload = {
-                origin: { lat: lat1, lon: lon1 },
-                destination: { lat: lat2, lon: lon2 },
+                origin: { lat: startCoords.lat, lon: startCoords.lon },
+                destination: { lat: endCoords.lat, lon: endCoords.lon },
                 mode: "wheelchair",
+                profile: profile, // Use the selected profile
                 avoid_stairs: true
             };
 
@@ -32,13 +45,39 @@ const RouteForm = ({ onRouteFound }) => {
             if (!response.ok) throw new Error("Failed to calculate route");
 
             const data = await response.json();
-            onRouteFound(data.geometry); // Pass the GeoJSON LineString up
+            // Pass the whole data object so we can access instructions
+            if (data.geometry) {
+                // Inject instructions into properties if backend didn't (resilience)
+                if (data.geometry.properties && !data.geometry.properties.instructions) {
+                    // If for some reason backend sends it separately, adapt here.
+                    // But our backend sends it in geometry.properties.
+                }
+            }
+            onRouteFound(data);
 
         } catch (err) {
             setError(err.message);
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleVoiceInput = (field) => {
+        if (!('webkitSpeechRecognition' in window)) {
+            alert("Browser Anda tidak mendukung Voice Input.");
+            return;
+        }
+        const recognition = new window.webkitSpeechRecognition();
+        recognition.lang = 'id-ID';
+        recognition.start();
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            if (field === 'start') setStart(transcript);
+            else setEnd(transcript);
+        };
+
+        recognition.onerror = (e) => console.error("Voice Error:", e);
     };
 
     return (
@@ -56,22 +95,28 @@ const RouteForm = ({ onRouteFound }) => {
             <h3>🚀 Rute Aman</h3>
             <form onSubmit={handleSearch}>
                 <div style={{ marginBottom: '10px' }}>
-                    <label>Awal (Lat, Lon):</label>
-                    <input
-                        type="text"
-                        value={start}
-                        onChange={(e) => setStart(e.target.value)}
-                        style={{ width: '100%', padding: '5px' }}
-                    />
+                    <label>Awal (Lokasi/Alamat):</label>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                        <input
+                            type="text"
+                            value={start}
+                            onChange={(e) => setStart(e.target.value)}
+                            style={{ flex: 1, padding: '5px' }}
+                        />
+                        <button type="button" onClick={() => handleVoiceInput('start')}>🎤</button>
+                    </div>
                 </div>
                 <div style={{ marginBottom: '10px' }}>
-                    <label>Tujuan (Lat, Lon):</label>
-                    <input
-                        type="text"
-                        value={end}
-                        onChange={(e) => setEnd(e.target.value)}
-                        style={{ width: '100%', padding: '5px' }}
-                    />
+                    <label>Tujuan (Lokasi/Alamat):</label>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                        <input
+                            type="text"
+                            value={end}
+                            onChange={(e) => setEnd(e.target.value)}
+                            style={{ flex: 1, padding: '5px' }}
+                        />
+                        <button type="button" onClick={() => handleVoiceInput('end')}>🎤</button>
+                    </div>
                 </div>
                 <button
                     type="submit"

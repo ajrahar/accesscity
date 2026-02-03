@@ -1,6 +1,6 @@
 import React from 'react';
 
-const AccessibilitySidebar = ({ route, onToggleContrast, highContrast }) => {
+const AccessibilitySidebar = ({ route, onToggleContrast, highContrast, profile, setProfile }) => {
     const speakRoute = () => {
         if (!route) {
             const utterance = new SpeechSynthesisUtterance("Belum ada rute yang dipilih.");
@@ -33,6 +33,26 @@ const AccessibilitySidebar = ({ route, onToggleContrast, highContrast }) => {
             border: highContrast ? '2px solid #ffff00' : 'none'
         }}>
             <h3>♿ Aksesibilitas</h3>
+
+            <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Profil Mobilitas:</label>
+                <select
+                    value={profile}
+                    onChange={(e) => setProfile(e.target.value)}
+                    style={{
+                        width: '100%',
+                        padding: '8px',
+                        borderRadius: '4px',
+                        border: '1px solid #ccc',
+                        backgroundColor: highContrast ? '#000' : '#fff',
+                        color: highContrast ? '#ff0' : '#000'
+                    }}
+                >
+                    <option value="wheelchair">🦽 Pengguna Kursi Roda</option>
+                    <option value="cane">walking stick Lansia / Tongkat</option>
+                    <option value="visual">👁️ Tunanetra</option>
+                </select>
+            </div>
 
             <div style={{ marginBottom: '15px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
